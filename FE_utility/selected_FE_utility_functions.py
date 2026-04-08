@@ -163,7 +163,7 @@ def get_analysis_info(model_name, part_name):
 # ===== Material Creation Helpers =====
 def Create_material_VL(model_name, material_name, Sy0, E, v, Rinf, n, alpha, Rho):
     """
-    Create a material with a Voce-like hardening table (elastic + plastic).
+    Create a material with a Voce nonlinear hardening model (elastic + plastic).
     E is expected in GPa and will be scaled to MPa for Abaqus.
     """
     if mdb is None:
@@ -206,31 +206,6 @@ def Create_material_JC(model_name, material_name, Sy0, E, v, B, n, Rho, m, Tmelt
 
     print("JC material created/updated:", material_name)
 
-def Create_material_Combined_JC_VL(model_name, material_name, Sy0, E, v, Rinf, n, alpha, Rho, m, T, Tr, Tmelt):
-    """
-    Create material with combined Voce hardening and temperature-dependent softening.
-    Produces a table of (stress, plastic_strain) and assigns to material.
-    """
-    if mdb is None:
-        raise RuntimeError("Abaqus mdb not available.")
-    model = mdb.models[model_name]
-
-    if material_name not in model.materials.keys():
-        model.Material(name=material_name)
-
-    epsilon_pl = np.linspace(0, 1.0, 300)
-    sigma_plastic = Sy0 + Rinf * (alpha * epsilon_pl + 1 - np.exp(-n * epsilon_pl))
-    T_ref = (T - Tr) / float(Tmelt - Tr) if (Tmelt - Tr) != 0 else 0.0
-    sigma = sigma_plastic * (1.0 - (T_ref ** m))
-    stress_strain_table = np.column_stack((sigma, epsilon_pl)).tolist()
-
-    model.materials[material_name].Plastic(table=stress_strain_table)
-    model.materials[material_name].Density(table=((Rho,),))
-    model.materials[material_name].Elastic(table=((E * 1000.0, v),))
-
-    print("Combined material created/updated:", material_name)
-    return stress_strain_table
-
 
 # ===== Job Submission & Run Helpers =====
 def Submit_Job(job_name, model_name):
@@ -254,8 +229,6 @@ def Submit_Job(job_name, model_name):
 def run_simulation(job_name, model_name):
     """
     Submit job and return the main result vectors via get_simulation_results.
-    This function is intentionally small: material updates & model configuration
-    should be done before calling it.
     """
     Submit_Job(job_name, model_name)
     # Brief pause to ensure output files are written
