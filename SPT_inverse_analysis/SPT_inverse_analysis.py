@@ -33,7 +33,6 @@ Original comments and annotations were cleaned by ChatGPT, under Oxford Universi
 
 # ===== Imports =====
 # Note: run_simulation should be imported from FE_utility.selected_FE_utility_functions
-# However, signature mismatch exists - see function definitions for details
 
 # ===== Parameter Scaling Helpers =====
 def scale_parameters(params):
@@ -111,7 +110,7 @@ def run_inverse_analysis(file_path, filter_data, regularization_factor, method, 
         except Exception:
             print("Warning: savgol_filter not available or failed. Using raw data.")
 
-    # prepare bounds for scipy minimize (if applicable)
+    # prepare bounds for scipy minimize
     # Form bounds list from lower_bounds and upper_bounds dictionaries
     try:
         if isinstance(lower_bounds, dict) and isinstance(upper_bounds, dict):
@@ -672,7 +671,7 @@ def objective_function_ss(params, experimental_force, experimental_def, experime
 
 # ===== General Utilities =====
 # Note: delete_all_xyData() is available in FE_utility/selected_FE_utility_functions.py
-# Import from there instead of duplicating:
+# Import from there:
 #     from FE_utility.selected_FE_utility_functions import delete_all_xyData
 
 
