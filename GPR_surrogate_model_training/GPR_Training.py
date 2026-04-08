@@ -707,7 +707,6 @@ def make_GPR_predictions(model, input):
 
 
 def _flatten_np(t, max_items=6):
-    """Pretty-print a small slice of a tensor for annotations."""
     try:
         arr = t.detach().cpu().view(-1).numpy()
     except Exception:
