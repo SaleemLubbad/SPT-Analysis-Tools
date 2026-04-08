@@ -245,9 +245,6 @@ def penalized_objective_function(params, experimental_force, experimental_def, e
       - Runs FE simulation via run_simulation
       - Computes NRMSE between simulation and experiment
       - Returns cost (NRMSE + penalties)
-    
-    Warning: May be redundant with objective_function(). Consider consolidating.
-    Warning: Calls run_simulation() which has signature mismatch - needs fixing.
     """
     penalty = 0
     # Access global bounds if defined
@@ -559,115 +556,6 @@ def objective_function(params, experimental_force, experimental_def, experimenta
         return 100
 
 
-# ===== Alternative Objective Function (SS) =====
-def objective_function_ss(params, experimental_force, experimental_def, experimental_time, filter_data,
-                       lower_bounds, upper_bounds, regularization_factor, working_dir,
-                       save_dir_path, job_name, material_name):
-    """
-    Alternative objective function using simplified metric calculation.
-    
-    Differences from objective_function():
-      - Simplified RMSE calculation without multiple weighting zones
-      - Uses elastic and hardening region RMSEs separately
-    
-    Warning: May be redundant with objective_function(). Consider consolidating.
-    Warning: Calls run_simulation() which has signature mismatch - needs fixing.
-    """
-    try:
-        scaled_params = scale_parameters(params)
-    except Exception:
-        scaled_params = params
-
-    # run FE
-    try:
-        simulation_force, simulation_def, simulation_time, simulation_PE, time_PE = run_simulation(
-            working_dir, job_name, material_name, scaled_params)
-    except Exception:
-        traceback.print_exc()
-        return 1e6
-
-    # make arrays and compute interpolated fields
-    try:
-        sim_def_interp = np.linspace(simulation_def[0], simulation_def[-1], len(experimental_def))
-        sim_force_interp = np.interp(sim_def_interp, simulation_def, simulation_force)
-    except Exception:
-        sim_def_interp = simulation_def
-        sim_force_interp = simulation_force
-
-    try:
-        uB_indx_sim = np.where(sim_def_interp >= thickness)[0][0]
-        uB_indx_exp = np.where(experimental_def >= thickness)[0][0]
-    except Exception:
-        uB_indx_sim = 0
-        uB_indx_exp = 0
-
-    # helper to match length and compute euclidean RMSE
-    def match_length_and_rmse(sim_force, sim_def, exp_force, exp_def):
-        min_len = min(len(sim_force), len(exp_force))
-        if len(sim_force) > min_len:
-            sim_def_resampled = np.linspace(sim_def[0], sim_def[-1], min_len)
-            sim_force_resampled = np.interp(sim_def_resampled, sim_def, sim_force)
-        else:
-            sim_def_resampled = sim_def
-            sim_force_resampled = sim_force
-
-        if len(exp_force) > min_len:
-            exp_def_resampled = np.linspace(exp_def[0], exp_def[-1], min_len)
-            exp_force_resampled = np.interp(exp_def_resampled, exp_def, exp_force)
-        else:
-            exp_def_resampled = exp_def
-            exp_force_resampled = exp_force
-
-        return np.sqrt(np.mean((sim_force_resampled - exp_force_resampled) ** 2 + (sim_def_resampled - exp_def_resampled) ** 2))
-
-    try:
-        first_weighting_limit = np.where(experimental_def >= thickness / 5)[0][0]
-    except Exception:
-        first_weighting_limit = 0
-
-    rmse_euc_elastic = match_length_and_rmse(
-            sim_force_interp[:np.where(sim_def_interp >= thickness / 5)[0][0]] if np.any(sim_def_interp >= thickness / 5) else sim_force_interp,
-            sim_def_interp[:np.where(sim_def_interp >= thickness / 5)[0][0]] if np.any(sim_def_interp >= thickness / 5) else sim_def_interp,
-            experimental_force[:np.where(experimental_def >= thickness / 5)[0][0]] if np.any(experimental_def >= thickness / 5) else experimental_force,
-            experimental_def[:np.where(experimental_def >= thickness / 5)[0][0]] if np.any(experimental_def >= thickness / 5) else experimental_def)
-
-    rmse_euc_hardening = match_length_and_rmse(
-            sim_force_interp[uB_indx_sim:], sim_def_interp[uB_indx_sim:], experimental_force[uB_indx_exp:], experimental_def[uB_indx_exp:])
-
-    if parameters == 'Elastic and Plastic':
-        w_whole, w_elastic, w_hardening = 1, 2, 2
-    elif parameters == 'Elastic':
-        w_whole, w_elastic = 0, 2
-        w_hardening = 0
-    else:
-        w_whole, w_elastic, w_hardening = 1, 1, 1
-
-    rmse = rmse_euc_elastic + rmse_euc_hardening
-    nrmse = 100 * rmse / (np.max(np.sqrt(experimental_force ** 2 + experimental_def ** 2)) if np.max(np.sqrt(experimental_force ** 2 + experimental_def ** 2)) != 0 else 1.0)
-
-    # penalty for bounds
-    penalty = 0
-    try:
-        for key in scaled_params.keys():
-            param = float(scaled_params[key])
-            lower = float(lower_bounds[key]) if isinstance(lower_bounds, dict) and key in lower_bounds else -np.inf
-            upper = float(upper_bounds[key]) if isinstance(upper_bounds, dict) and key in upper_bounds else np.inf
-            if param < lower:
-                penalty += ((lower - param) ** 2) * 100
-            elif param > upper:
-                penalty += ((param - upper) ** 2) * 100
-    except Exception:
-        pass
-
-    total_cost = nrmse + penalty
-
-    try:
-        plot_simulation_vs_experiment(sim_def_interp, sim_force_interp, experimental_def, experimental_force, 0, uB_indx_exp, total_cost, scaled_params, save_dir_path)
-    except Exception:
-        pass
-
-    return total_cost
-
 
 # ===== General Utilities =====
 # Note: delete_all_xyData() is available in FE_utility/selected_FE_utility_functions.py
@@ -723,34 +611,27 @@ def plot_simulation_vs_experiment(simulation_def, simulation_force,
 def plot_optimization_results(sigma_y0_values, E_values, R_inf_values, alpha_values, n_values, dir_path):
     """
     Plot parameter evolution over optimization iterations.
-    
-    Attempts to import external plotting function from basic_functions module.
-    Falls back to simple built-in plot if import fails.
     """
     try:
-        from basic_functions import plot_optimization_results as external_plot
-        return external_plot(sigma_y0_values, E_values, R_inf_values, alpha_values, n_values, dir_path)
+        os.makedirs(dir_dir if 'dir_dir' in locals() else dir_path, exist_ok=True)
+        iterations = range(max(1, len(sigma_y0_values)))
+        plt.figure(figsize=(10, 6))
+        if len(sigma_y0_values) > 0:
+            plt.subplot(211)
+            plt.plot(iterations[:len(sigma_y0_values)], sigma_y0_values, '-o')
+            plt.title('Sigma_y0 over iterations')
+        if len(E_values) > 0:
+            plt.subplot(212)
+            plt.plot(iterations[:len(E_values)], E_values, '-d')
+            plt.title('E over iterations')
+        timestamp_str = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        fname = os.path.join(dir_path, "Parameter_optimisation_{}.png".format(timestamp_str))
+        plt.tight_layout()
+        plt.savefig(fname, dpi=300)
+        plt.close()
+        return fname
     except Exception:
-        try:
-            os.makedirs(dir_dir if 'dir_dir' in locals() else dir_path, exist_ok=True)
-            iterations = range(max(1, len(sigma_y0_values)))
-            plt.figure(figsize=(10, 6))
-            if len(sigma_y0_values) > 0:
-                plt.subplot(211)
-                plt.plot(iterations[:len(sigma_y0_values)], sigma_y0_values, '-o')
-                plt.title('Sigma_y0 over iterations')
-            if len(E_values) > 0:
-                plt.subplot(212)
-                plt.plot(iterations[:len(E_values)], E_values, '-d')
-                plt.title('E over iterations')
-            timestamp_str = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-            fname = os.path.join(dir_path, "Parameter_optimisation_{}.png".format(timestamp_str))
-            plt.tight_layout()
-            plt.savefig(fname, dpi=300)
-            plt.close()
-            return fname
-        except Exception:
-            traceback.print_exc()
-            return None
+        traceback.print_exc()
+        return None
 
 # End of SPT_inverse_analysis.py
