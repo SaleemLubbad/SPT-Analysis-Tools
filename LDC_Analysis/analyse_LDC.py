@@ -2,7 +2,7 @@
 SPT Load-Deflection Curve Analysis
 
 Extracts characteristic features from SPT load-deflection curves (LDC) and
-analyzes them according to EN 10371 and ASTM E3205-20 standards.
+analyses them according to EN 10371 and ASTM E3205-20 standards.
 
 IMPORTANT:
     - These functions assume execution inside an Abaqus Python environment
@@ -10,15 +10,13 @@ IMPORTANT:
     - Abaqus typically runs Python 2.7
 
 Key features extracted:
-    - Inflection points (yield, elastic-plastic transition, plastic instability)
+    - Inflexion points (yield, elastic-plastic transition, plastic instability)
     - Slope values for different deformation stages
     - Force values at specific deflections (EN 10371, ASTM E3205-20)
 
 Author: Saleem Lubbad
 Original comments and annotations were cleaned by ChatGPT, under Oxford University license.
 """
-
-
 
 def analyse_LDC_(
         deflection, force, thickness,
@@ -62,7 +60,7 @@ def analyse_LDC_(
 
     ui_std = 0.552  # Table C.1 prEN 10371:2019 (E) – SPT standard (reference deflection)
     Slope_0, Slope_I, Slope_II, Slope_III, Slope_IV = [], [], [], [], []
-    anaomolies_indx = []
+    anomalies_indx = []
 
     try:
         no_simulations = force.shape[1]
